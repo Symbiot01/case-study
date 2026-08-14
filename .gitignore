@@ -1,0 +1,12 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+*.db
+*.sqlite3
+ecommerce.db
+ecommerce-venv/
+venv/
+.venv/
+.vscode/
+.idea/
