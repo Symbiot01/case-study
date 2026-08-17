@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ecommerce.keycloak import (
@@ -12,8 +13,11 @@ from . import services
 
 
 async def signup(user, db):
-    # Check whether username already exists locally
-    existing_user = db.query(User).filter(User.username == user.username).first()
+    existing_user = (
+        db.query(User)
+        .filter(func.lower(User.username) == user.username.lower())
+        .first()
+    )
 
     if existing_user:
         raise HTTPException(
@@ -23,7 +27,6 @@ async def signup(user, db):
 
     user_role = services.get_role(db, "USER")
 
-    # Create user in Keycloak
     keycloak_user_id = await create_keycloak_user(
         username=user.username,
         password=user.password,

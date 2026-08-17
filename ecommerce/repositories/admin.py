@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ecommerce.keycloak import create_keycloak_user, delete_keycloak_user
@@ -8,7 +9,9 @@ from ecommerce.schemas import TenantCreate, UserCreate
 
 
 def create_tenant(db: Session, tenant: TenantCreate):
-    existing_tenant = db.query(Tenant).filter(Tenant.name == tenant.name).first()
+    existing_tenant = (
+        db.query(Tenant).filter(func.lower(Tenant.name) == tenant.name.lower()).first()
+    )
 
     if existing_tenant:
         raise HTTPException(
@@ -41,10 +44,14 @@ def delete_tenant(db: Session, tenant_name: str):
     return None
 
 
-async def create_user(db: Session, tenant_name: str, user: UserCreate):
+async def create_tenant_user(db: Session, tenant_name: str, user: UserCreate):
     tenant = services.get_tenant(db, tenant_name)
 
-    existing_user = db.query(User).filter(User.username == user.username).first()
+    existing_user = (
+        db.query(User)
+        .filter(func.lower(User.username) == user.username.lower())
+        .first()
+    )
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -34,13 +34,13 @@ def delete_tenant(
 
 
 @router.post("/tenants/{tenant_name}/users", status_code=status.HTTP_201_CREATED)
-async def create_user(
+async def create_tenant_user(
     tenant_name: str,
     user: UserCreate,
     db: Session = Depends(get_db),
     credentials=Depends(require_admin),
 ):
-    return await admin.create_user(db, tenant_name, user)
+    return await admin.create_tenant_user(db, tenant_name, user)
 
 
 @router.get("/tenants/{tenant_name}/users", status_code=status.HTTP_200_OK)

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 # ROLE
 
@@ -18,6 +19,14 @@ class UserCreate(BaseModel):
     username: str
     password: str
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        username = value.strip()
+        if not username:
+            raise ValueError("Username cannot be empty")
+        return username
+
 
 class UserResponse(BaseModel):
     id: int
@@ -33,6 +42,14 @@ class UserResponse(BaseModel):
 
 class TenantCreate(BaseModel):
     name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_tenant_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Tenant name cannot be empty")
+        return name
 
 
 class TenantResponse(BaseModel):
