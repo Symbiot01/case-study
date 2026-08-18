@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 
 from ecommerce.routers import auth, orders, products, tenant, admin
 

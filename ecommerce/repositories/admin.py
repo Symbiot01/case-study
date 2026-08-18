@@ -63,7 +63,6 @@ async def create_tenant_user(db: Session, tenant_name: str, user: UserCreate):
     keycloak_user_id = await create_keycloak_user(
         username=user.username,
         password=user.password,
-        tenant_name=tenant.name,
     )
 
     db_user = User(

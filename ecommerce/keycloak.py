@@ -100,7 +100,6 @@ async def get_user_token(username: str, password: str):
 async def create_keycloak_user(
     username: str,
     password: str,
-    tenant_name: str | None = None,
 ):
     admin_token = await get_admin_token()
 
@@ -115,9 +114,6 @@ async def create_keycloak_user(
             }
         ],
     }
-
-    if tenant_name is not None:
-        user_data["attributes"] = {"tenant_name": [tenant_name]}
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
