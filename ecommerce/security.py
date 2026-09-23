@@ -1,7 +1,7 @@
+import logging
 import os
 
 import httpx
-from dotenv import load_dotenv
 from jose import jwt, JWTError
 from fastapi import (
     Depends,
@@ -15,9 +15,12 @@ from fastapi.security import (
 from sqlalchemy.orm import Session
 
 from ecommerce.database import get_db
+from ecommerce.env import load_app_env
 from ecommerce.models import User
 
-load_dotenv()
+load_app_env()
+
+logger = logging.getLogger(__name__)
 
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
@@ -79,10 +82,11 @@ async def get_current_user(
             options={"verify_aud": False},
         )
 
-    except JWTError as exc:
+    except JWTError:
+        logger.info("Token validation failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token validation failed: {str(exc)}",
+            detail="Token validation failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -21,7 +21,7 @@ def create_tenant(
     return admin.create_tenant(db, tenant)
 
 
-@router.get("/tenants", status_code=status.HTTP_200_OK)
+@router.get("/tenants")
 def list_tenants(db: Session = Depends(get_db), credentials=Depends(require_admin)):
     return admin.list_tenants(db)
 
@@ -43,7 +43,7 @@ async def create_tenant_user(
     return await admin.create_tenant_user(db, tenant_name, user)
 
 
-@router.get("/tenants/{tenant_name}/users", status_code=status.HTTP_200_OK)
+@router.get("/tenants/{tenant_name}/users")
 def list_users(
     tenant_name: str, db: Session = Depends(get_db), credentials=Depends(require_admin)
 ):

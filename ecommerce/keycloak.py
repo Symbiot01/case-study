@@ -1,10 +1,14 @@
+import logging
 import os
 
 import httpx
-from dotenv import load_dotenv
 from fastapi import HTTPException, status
 
-load_dotenv()
+from ecommerce.env import load_app_env
+
+load_app_env()
+
+logger = logging.getLogger(__name__)
 
 
 # Keycloak configuration
@@ -35,63 +39,66 @@ KEYCLOAK_TOKEN_URL = (
 KEYCLOAK_ADMIN_URL = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}"
 
 
-# Get service-account token
+async def _token_request(form: dict, on_error) -> dict:
+    payload = {"client_id": KEYCLOAK_CLIENT_ID, **form}
+    if KEYCLOAK_CLIENT_SECRET:
+        payload.setdefault("client_secret", KEYCLOAK_CLIENT_SECRET)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(KEYCLOAK_TOKEN_URL, data=payload)
+
+    if response.status_code != 200:
+        on_error(response.status_code)
+    return response.json()
+
+
+def _reject_admin_token(code: int) -> None:
+    logger.warning("Keycloak admin authentication failed with status %s", code)
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Could not authenticate with Keycloak",
+    )
+
+
+def _reject_user_token(code: int) -> None:
+    if code in (400, 401):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Could not authenticate with Keycloak",
+    )
+
+
+def _reject_refresh(_code: int) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Session expired",
+    )
 
 
 async def get_admin_token():
-    data = {
-        "grant_type": "client_credentials",
-        "client_id": KEYCLOAK_CLIENT_ID,
-        "client_secret": KEYCLOAK_CLIENT_SECRET,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            KEYCLOAK_TOKEN_URL,
-            data=data,
-        )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Could not authenticate with Keycloak: "
-                f"status={response.status_code}, "
-                f"response={response.text}"
-            ),
-        )
-
-    return response.json()["access_token"]
+    token = await _token_request(
+        {"grant_type": "client_credentials", "client_secret": KEYCLOAK_CLIENT_SECRET},
+        _reject_admin_token,
+    )
+    return token["access_token"]
 
 
 async def get_user_token(username: str, password: str):
-    data = {
-        "grant_type": "password",
-        "client_id": KEYCLOAK_CLIENT_ID,
-        "username": username,
-        "password": password,
-    }
+    return await _token_request(
+        {"grant_type": "password", "username": username, "password": password},
+        _reject_user_token,
+    )
 
-    if KEYCLOAK_CLIENT_SECRET:
-        data["client_secret"] = KEYCLOAK_CLIENT_SECRET
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            KEYCLOAK_TOKEN_URL,
-            data=data,
-        )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=(
-                "Keycloak login failed: "
-                f"status={response.status_code}, "
-                f"response={response.text}"
-            ),
-        )
-
-    return response.json()
+async def refresh_user_token(refresh_token: str):
+    return await _token_request(
+        {"grant_type": "refresh_token", "refresh_token": refresh_token},
+        _reject_refresh,
+    )
 
 
 # Create user in Keycloak
@@ -129,13 +136,13 @@ async def create_keycloak_user(
         )
 
     if response.status_code != 201:
+        logger.warning(
+            "Keycloak user creation failed with status %s",
+            response.status_code,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Could not create user in Keycloak: "
-                f"status={response.status_code}, "
-                f"response={response.text}"
-            ),
+            detail="Could not create user in Keycloak",
         )
 
     location = response.headers.get("Location")
@@ -167,11 +174,11 @@ async def delete_keycloak_user(
         )
 
     if response.status_code not in (204, 404):
+        logger.warning(
+            "Keycloak user deletion failed with status %s",
+            response.status_code,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Could not delete user from Keycloak: "
-                f"status={response.status_code}, "
-                f"response={response.text}"
-            ),
+            detail="Could not delete user from Keycloak",
         )

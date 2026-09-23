@@ -1,11 +1,15 @@
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ecommerce.keycloak import create_keycloak_user, delete_keycloak_user
-from ecommerce.models import Tenant, User
+from ecommerce.models import Product, Tenant, User
 from ecommerce.repositories import services
 from ecommerce.schemas import TenantCreate, UserCreate
+
+logger = logging.getLogger(__name__)
 
 
 def create_tenant(db: Session, tenant: TenantCreate):
@@ -34,7 +38,26 @@ def create_tenant(db: Session, tenant: TenantCreate):
 
 
 def list_tenants(db: Session):
-    return db.query(Tenant).all()
+    tenants = db.query(Tenant).order_by(Tenant.name).all()
+    product_counts = dict(
+        db.query(Product.tenant_id, func.count(Product.id))
+        .group_by(Product.tenant_id)
+        .all()
+    )
+    staff_counts = dict(
+        db.query(User.tenant_id, func.count(User.id))
+        .group_by(User.tenant_id)
+        .all()
+    )
+    return [
+        {
+            "id": tenant.id,
+            "name": tenant.name,
+            "product_count": product_counts.get(tenant.id, 0),
+            "staff_count": staff_counts.get(tenant.id, 0),
+        }
+        for tenant in tenants
+    ]
 
 
 def delete_tenant(db: Session, tenant_name: str):
@@ -84,9 +107,10 @@ async def create_tenant_user(db: Session, tenant_name: str, user: UserCreate):
         except Exception:
             pass
 
+        logger.exception("Tenant user creation failed after Keycloak signup")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not create tenant user: {str(exc)}",
+            detail="Could not create tenant user",
         )
 
     return {
@@ -103,7 +127,16 @@ async def create_tenant_user(db: Session, tenant_name: str, user: UserCreate):
 
 def list_users(db: Session, tenant_name: str):
     tenant = services.get_tenant(db, tenant_name)
-    return db.query(User).filter(User.tenant_id == tenant.id).all()
+    users = db.query(User).filter(User.tenant_id == tenant.id).all()
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role.name if user.role is not None else None,
+            "tenant_id": user.tenant_id,
+        }
+        for user in users
+    ]
 
 
 async def delete_user(db: Session, tenant_name: str, user_id: int):

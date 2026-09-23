@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from ecommerce.models import Order, OrderItem, Product, User
+from ecommerce.models import Order, OrderItem, User
 from ecommerce.schemas import OrderCreate
 
 
@@ -93,10 +93,15 @@ def list_orders(db: Session, current_user: User, page: int = 1, limit: int = 10)
 
     total = query.count()
     offset = (page - 1) * limit
-    orders = query.offset(offset).limit(limit).all()
+    orders = (
+        query.options(selectinload(Order.items).selectinload(OrderItem.product))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return {
-        "orders": orders,
+        "orders": [services.serialize_order(order) for order in orders],
         "page": page,
         "limit": limit,
         "total": total,
@@ -106,20 +111,4 @@ def list_orders(db: Session, current_user: User, page: int = 1, limit: int = 10)
 
 def get_order(db: Session, current_user: User, order_id: int):
     order = services.get_order_for_user(db, current_user.id, order_id)
-
-    return {
-        "id": order.id,
-        "user_id": order.user_id,
-        "total_quantity": order.total_quantity,
-        "total_amount": order.total_amount,
-        "items": [
-            {
-                "id": item.id,
-                "product_name": item.product.name if item.product else None,
-                "product_id": item.product_id,
-                "quantity": item.quantity,
-                "price": item.price,
-            }
-            for item in order.items
-        ],
-    }
+    return services.serialize_order(order)

@@ -1,8 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from ecommerce.models import Category, Product
-from ecommerce.repositories import services
+from ecommerce.models import Category
 from ecommerce.schemas import CategoryCreate
 
 
@@ -25,16 +24,6 @@ def create(category: CategoryCreate, db: Session):
     return {
         "message": "Category created successfully",
         "category": db_category,
-    }
-
-
-def list_by_category(category_id: int, db: Session):
-    category = services.get_category(db, category_id)
-    products = db.query(Product).filter(Product.category_id == category_id).all()
-
-    return {
-        "category": category,
-        "products": products,
     }
 
 

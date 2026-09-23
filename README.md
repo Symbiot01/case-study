@@ -1,156 +1,114 @@
 ## Requirements
 
-You will need:
-
 - Python 3.11 or 3.12
-- pip
-- a local Keycloak instance
+- Node.js 20 or newer
+- Docker with Compose
 - Git
 
-## 1. Clone the project
+## 1. Clone and install
 
 ```bash
 git clone https://git.beehyv.com/saroja.bamra/fastapi-assignment
 cd fastapi-assignment
-```
-
-## 2. Create a virtual environment
-
-```bash
 python -m venv ecommerce-venv
 source ecommerce-venv/bin/activate
-```
-
-## 3. Install dependencies
-
-```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+npm install --prefix web
 ```
 
-## 4. Set up the environment variables
+## 2. Copy the local env
 
-Create a `.env` file in the project root:
+`.env.example` is the shared localhost config. Docker Compose reads `.env`. The API reads `.env.dev` first, then fills anything still missing from `.env`. Copy the example to both before the first start so Keycloak, MinIO, and the seed use the same values.
 
 ```bash
-cat > .env <<'EOF'
-KEYCLOAK_URL=http://localhost:8080
-KEYCLOAK_REALM=ecommerce
-KEYCLOAK_CLIENT_ID=ecommerce-api
-KEYCLOAK_CLIENT_SECRET=your_client_secret_here
-EOF
+cp .env.example .env
+cp .env.example .env.dev
 ```
 
-The app expects these values to match your Keycloak setup:
+Those passwords are for a machine on localhost. Do not use them on a public host, and do not publish MinIO port 9000.
 
-- `KEYCLOAK_URL` = your Keycloak base URL
-- `KEYCLOAK_REALM` = `ecommerce`
-- `KEYCLOAK_CLIENT_ID` = `ecommerce-api`
-- `KEYCLOAK_CLIENT_SECRET` = the client secret from Keycloak
-
-## 5. Start Keycloak
-
-This app depends on Keycloak being running for login and token validation.
-
-Before testing authenticated routes, make sure the Keycloak realm and client are set up correctly.
-
-## 6. Create the local database
-
-The app uses SQLite and creates the tables automatically when it starts.
-
-You can just run the app and let FastAPI build the database schema.
-
-## 7. Seed the roles
-
-This project includes a small seed script for the default roles:
+## 3. Start Keycloak and MinIO
 
 ```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+This starts:
+
+- Keycloak at `http://localhost:8080`
+- MinIO at `http://127.0.0.1:9000`, console at `http://127.0.0.1:9001`
+- a one-shot init that creates the private `product-images` bucket and the `ecommerce-api` user
+
+The MinIO image is `quay.io/minio/minio` because Docker Hub no longer serves that repository. The API user can only get, put, and delete objects in `product-images`. The storefront never talks to MinIO. The API stores the file and serves it.
+
+Wait until Keycloak answers and the init container has exited:
+
+```bash
+docker compose -f docker-compose.dev.yml ps
+```
+
+`minio-init` should be `exited` with code 0. Keycloak can take a minute on the first start.
+
+## 4. Seed Keycloak and the shop
+
+```bash
+python scripts/seed_dev.py
 python seed.py
 ```
 
-It creates the roles used in the app:
+`scripts/seed_dev.py` creates the `ecommerce` realm, the `ecommerce-api` client, and three accounts. It keeps the passwords already in `.env.dev` and writes a client secret. `seed.py` adds the catalogue: brands, categories, and products. Both are safe to run again.
 
-- `ADMIN`
-- `TENANT`
-- `USER`
+Sign in with the accounts from `.env.example`:
 
-Additionally, the seed.py file updates the role of any user created with the username `admin` to `ADMIN` (to avoid updating the admin role manually). After creating a user named `admin` run this script again:
+| Account | Username | Password | Where to sign in |
+| --- | --- | --- | --- |
+| Shopper | `shopper` | `shopper-local-1` | `/login` |
+| Admin | `admin` | `admin-local-1` | `/login` |
+| Brand staff | `ilse` | `ilse-local-1` | `/Studio%20Ilse/login` |
+
+## 5. Run the API and the storefront
+
+In one terminal, from the project root with the virtual environment active:
 
 ```bash
-python seed.py
+uvicorn ecommerce.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## 8. Run the app
+In another:
 
 ```bash
-uvicorn ecommerce.main:app --reload
+npm run dev --prefix web
 ```
 
-Then open:
+Open the shop at `http://localhost:5173`. The storefront calls `/api`, and Vite forwards that to the API. API docs are at `http://127.0.0.1:8000/docs`.
 
-```text
-http://localhost:8000/docs
-```
+SQLite is created at `./ecommerce.db` on startup, including the product image columns.
 
-The Swagger docs are available there.
-
-## 9. Run the tests
+## 6. Run the tests
 
 ```bash
 pytest -q
 ```
 
-Or just one file:
-
-```bash
-pytest -q tests/test_auth.py
-```
+Tests use an in-memory stand-in for MinIO, so they do not need the bucket to be running.
 
 ## Notes
 
-- The local database is stored at `./ecommerce.db`
-- The app creates tables automatically on startup
-- `.env`, virtual environments, sqlite files, and Python cache files are ignored in `.gitignore`
+- `.env.example` is committed. `.env`, `.env.dev`, the virtual environment, `web/node_modules`, and `ecommerce.db` stay out of git.
+- Changing `MINIO_ROOT_PASSWORD` or `S3_SECRET_KEY` after the first start does not update the existing MinIO volume. Reset it with `docker compose -f docker-compose.dev.yml down -v` and start again. That deletes stored images.
+- Keycloak's admin password is fixed on the first start. It must stay the same in `.env` and `.env.dev`.
 
 ## Common issues
 
-### Missing packages
+### Keycloak is up, but seed cannot sign in
 
-```bash
-pip install -r requirements.txt
-```
+`KEYCLOAK_ADMIN_PASSWORD` in `.env.dev` does not match the password Keycloak was first started with. Put the same value in both files. If the container was created with a blank password, remove the Keycloak volume and start Compose again.
 
-### Keycloak errors
+### Product images fail to upload
 
-Check that:
+Check that `minio-init` exited 0, and that `S3_SECRET_KEY` in `.env` is the secret the init container used. The API reads that value from `.env`.
 
-- Keycloak is running
-- the realm is named `ecommerce`
-- the client ID is `ecommerce-api`
-- the secret in `.env` matches Keycloak
+### The shop cannot reach the API
 
-### Database not created
-
-Restart the app or run:
-
-```bash
-python -c "from ecommerce.database import Base, engine; Base.metadata.create_all(bind=engine)"
-```
-
-## Quick setup summary
-
-```bash
-git clone <repo>
-cd ecommerce-app
-python -m venv ecommerce-venv
-source ecommerce-venv/bin/activate
-pip install -r requirements.txt
-cat > .env <<'EOF'
-KEYCLOAK_URL=http://localhost:8080
-KEYCLOAK_REALM=ecommerce
-KEYCLOAK_CLIENT_ID=ecommerce-api
-KEYCLOAK_CLIENT_SECRET=your_client_secret_here
-EOF
-python seed.py
-uvicorn ecommerce.main:app --reload
-```
+The storefront expects the API on `127.0.0.1:8000`. Leave `VITE_API_URL` unset for local development.

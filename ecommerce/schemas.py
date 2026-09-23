@@ -1,18 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
-
-# ROLE
-
-
-class RoleResponse(BaseModel):
-    id: int
-    name: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# USER
+from pydantic import BaseModel, field_validator
 
 
 class UserCreate(BaseModel):
@@ -28,16 +16,16 @@ class UserCreate(BaseModel):
         return username
 
 
-class UserResponse(BaseModel):
-    id: int
-    username: str
-    role_id: int
-    tenant_id: Optional[int] = None
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-# TENANT
+    @field_validator("refresh_token")
+    @classmethod
+    def validate_refresh_token(cls, value: str) -> str:
+        token = value.strip()
+        if not token or len(token) > 8192:
+            raise ValueError("Refresh token is invalid")
+        return token
 
 
 class TenantCreate(BaseModel):
@@ -52,28 +40,8 @@ class TenantCreate(BaseModel):
         return name
 
 
-class TenantResponse(BaseModel):
-    id: int
-    name: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# CATEGORY
-
-
 class CategoryCreate(BaseModel):
     name: str
-
-
-class CategoryResponse(BaseModel):
-    id: int
-    name: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# PRODUCT
 
 
 class ProductCreate(BaseModel):
@@ -90,60 +58,10 @@ class ProductUpdate(BaseModel):
     category_id: Optional[int] = None
 
 
-class ProductResponse(BaseModel):
-    id: int
-    name: str
-    price: float
-    quantity: int
-    tenant_id: int
-    category_id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ORDER ITEM
-
-
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: int
 
 
-class OrderItemResponse(BaseModel):
-    id: int
-    product_id: int
-    quantity: int
-    price: float
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ORDER
-
-
 class OrderCreate(BaseModel):
     items: List[OrderItemCreate]
-
-
-class OrderResponse(BaseModel):
-    id: int
-    user_id: int
-    total_quantity: int
-    total_amount: float
-    items: List[OrderItemResponse]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# FAVOURITES
-
-
-class FavouriteProductResponse(BaseModel):
-    id: int
-    name: str
-    price: float
-    quantity: int
-    tenant_id: int
-    category_id: int
-
-    model_config = ConfigDict(from_attributes=True)

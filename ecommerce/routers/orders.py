@@ -13,7 +13,6 @@ router = APIRouter(
 )
 
 
-# Create an order
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_order(
     order: OrderCreate,
@@ -23,8 +22,7 @@ def create_order(
     return orders.create_order(db, current_user, order)
 
 
-# Get current user's order history
-@router.get("/", status_code=status.HTTP_200_OK)
+@router.get("/")
 def list_orders(
     page: int = 1,
     limit: int = 10,
@@ -34,11 +32,7 @@ def list_orders(
     return orders.list_orders(db, current_user, page, limit)
 
 
-# Get details of a specific order
-@router.get(
-    "/{order_id}",
-    status_code=status.HTTP_200_OK,
-)
+@router.get("/{order_id}")
 def get_order(
     order_id: int,
     db: Session = Depends(get_db),

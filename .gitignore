@@ -1,5 +1,6 @@
 .env
 .env.*
+!.env.example
 __pycache__/
 *.pyc
 *.db
@@ -10,3 +11,5 @@ venv/
 .venv/
 .vscode/
 .idea/
+web/node_modules/
+web/dist/

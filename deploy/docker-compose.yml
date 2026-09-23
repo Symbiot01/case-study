@@ -1,0 +1,16 @@
+services:
+  proxy:
+    image: caddy:2-alpine
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/dist:/srv:ro
+    restart: "no"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    network_mode: host
+    command: tunnel --no-autoupdate --url http://127.0.0.1:8787
+    depends_on:
+      - proxy
+    restart: "no"

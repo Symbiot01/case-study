@@ -91,15 +91,20 @@ def seed_catalog(db):
 
 @pytest.fixture
 def client(db, seed_catalog):
+    from ecommerce.storage import MemoryObjectStore, get_object_store
+
     def override_get_db():
         try:
             yield db
         finally:
             pass
 
+    store = MemoryObjectStore()
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_object_store] = lambda: store
 
     with TestClient(app) as test_client:
+        test_client.app.state.image_store = store
         yield test_client
 
     app.dependency_overrides.clear()
